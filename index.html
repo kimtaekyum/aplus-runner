@@ -82,6 +82,9 @@ const RIVAL_LINES = [
   '예지: "마지막 학기... 나도 전력으로 간다!"',
 ];
 
+// 플레이 중 예지가 가끔 내뱉는 혼잣말
+const RIVAL_CHATTER = ['승현님, 좋다 좋다', '자퇴하고 싶다', '으어어어어어'];
+
 // 아이템 정의
 const GOOD_ITEMS = [
   { emoji: '📖', score: 8,  label: '+8' },
@@ -109,7 +112,7 @@ let retries = 2;       // 재수강 기회
 let grades = [];
 
 const player = { x: W / 2, y: H - 90, w: 74, h: 74, vx: 0, face: 1, stun: 0, boost: 0 };
-const rival = { x: W / 4, y: H - 90, face: 1, stun: 0, score: 0, moving: false };
+const rival = { x: W / 4, y: H - 90, face: 1, stun: 0, score: 0, moving: false, say: '', sayT: 0, nextSay: 4 };
 let playerWins = 0, rivalWins = 0, lastRivalScore = 0;
 let items = [];        // 떨어지는 것들
 let floats = [];       // 떠오르는 텍스트
@@ -159,6 +162,7 @@ function startPlay() {
   items = []; floats = []; particles = [];
   player.x = W / 2; player.stun = 0; player.boost = 0;
   rival.x = W / 4; rival.stun = 0; rival.score = 0; rival.face = 1;
+  rival.say = ''; rival.sayT = 0; rival.nextSay = 3 + Math.random() * 4;
 }
 
 // ===== 스폰 =====
@@ -248,6 +252,15 @@ function updatePlay(dt) {
   rival.x += rdir * (rival.stun > 0 ? 90 : 255) * dt;
   rival.x = Math.max(40, Math.min(W - 40, rival.x));
 
+  // 예지 혼잣말
+  if (rival.sayT > 0) rival.sayT -= dt;
+  rival.nextSay -= dt;
+  if (rival.nextSay <= 0) {
+    rival.say = RIVAL_CHATTER[(Math.random() * RIVAL_CHATTER.length) | 0];
+    rival.sayT = 2.5;
+    rival.nextSay = 5 + Math.random() * 6;
+  }
+
   // 타이머
   timeLeft -= dt;
   if (!finalsWeek && timeLeft <= 10) {
@@ -323,6 +336,7 @@ function rivalCatch(it) {
   } else if (it.kind === 'bad') {
     rival.score = Math.max(0, rival.score + it.def.score);
     rival.stun = 1.2;
+    rival.say = '으어어어어어'; rival.sayT = 1.5;
     addFloat(it.x, it.y, '예지 멘붕!', '#ff9ec4');
   } else {
     rival.score = Math.min(100, rival.score + 3);
@@ -722,6 +736,28 @@ function drawPlay() {
   // 임승현
   const pState = player.stun > 0 ? 'stun' : (player.moving ? 'run' : 'idle');
   drawCharacter(player.x, player.y, 64, player.face, pState);
+
+  // 예지 말풍선
+  if (rival.sayT > 0) {
+    ctx.font = 'bold 13px sans-serif';
+    const tw = ctx.measureText(rival.say).width;
+    const bw = tw + 22, bh = 26;
+    const bxp = Math.max(10 + bw / 2, Math.min(W - 10 - bw / 2, rival.x));
+    const byp = rival.y - 62;
+    ctx.globalAlpha = Math.min(1, rival.sayT / 0.4);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    roundRect(bxp - bw / 2, byp - bh, bw, bh, 10); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(rival.x - 5, byp - 1);
+    ctx.lineTo(rival.x + 5, byp - 1);
+    ctx.lineTo(rival.x, byp + 6);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#4a2545';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(rival.say, bxp, byp - bh / 2);
+    ctx.globalAlpha = 1;
+  }
   if (player.boost > 0) {
     ctx.font = '18px sans-serif';
     ctx.fillText('⚡', player.x - 40, player.y - 20);
