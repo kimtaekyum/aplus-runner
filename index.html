@@ -72,14 +72,14 @@ const INTRO_LINES = [
 ];
 
 const RIVAL_LINES = [
-  '시현: "네가 임승현? 올 A+가 목표라며. 나도야."',
-  '시현: "영어 발표 수업? 여기선 내가 홈그라운드지."',
-  '시현: "지난 학기는 운이 좋았을 뿐이야."',
-  '시현: "무역용어 정리본? 너한텐 안 보여줄 건데~"',
-  '시현: "환율 계산 속도는 내가 한 수 위야."',
-  '시현: "협상은 심리전. 네 표정, 다 읽혀."',
-  '시현: "벌써 4학년이네. 끝까지 가보자."',
-  '시현: "마지막 학기... 나도 전력으로 간다!"',
+  '예지: "네가 임승현? 올 A+가 목표라며. 나도야."',
+  '예지: "영어 발표 수업? 여기선 내가 홈그라운드지."',
+  '예지: "지난 학기는 운이 좋았을 뿐이야."',
+  '예지: "무역용어 정리본? 너한텐 안 보여줄 건데~"',
+  '예지: "환율 계산 속도는 내가 한 수 위야."',
+  '예지: "협상은 심리전. 네 표정, 다 읽혀."',
+  '예지: "벌써 4학년이네. 끝까지 가보자."',
+  '예지: "마지막 학기... 나도 전력으로 간다!"',
 ];
 
 // 아이템 정의
@@ -233,7 +233,7 @@ function updatePlay(dt) {
   player.x += dir * speed * dt;
   player.x = Math.max(40, Math.min(W - 40, player.x));
 
-  // 라이벌 김시현 AI: 가장 가까운 좋은 아이템을 쫓는다
+  // 라이벌 최예지 AI: 가장 가까운 좋은 아이템을 쫓는다
   if (rival.stun > 0) rival.stun -= dt;
   let target = null, bestD = Infinity;
   for (const it of items) {
@@ -261,7 +261,7 @@ function updatePlay(dt) {
   if (spawnTimer <= 0) {
     spawnItem();
     if (finalsWeek && Math.random() < 0.5) spawnItem();
-    spawnTimer = s.spawn * 0.85 * (finalsWeek ? 0.6 : 1); // 시현과 경쟁하는 만큼 아이템 보충
+    spawnTimer = s.spawn * 0.85 * (finalsWeek ? 0.6 : 1); // 예지과 경쟁하는 만큼 아이템 보충
   }
 
   // 아이템 이동/충돌
@@ -318,15 +318,15 @@ function rivalCatch(it) {
   if (it.kind === 'good') {
     const sc = it.def.score * (it.golden ? 2 : 1);
     rival.score = Math.min(100, rival.score + sc);
-    addFloat(it.x, it.y, '시현 +' + sc, '#ff9ec4');
+    addFloat(it.x, it.y, '예지 +' + sc, '#ff9ec4');
     burst(it.x, it.y, '#ff9ec4', 6);
   } else if (it.kind === 'bad') {
     rival.score = Math.max(0, rival.score + it.def.score);
     rival.stun = 1.2;
-    addFloat(it.x, it.y, '시현 멘붕!', '#ff9ec4');
+    addFloat(it.x, it.y, '예지 멘붕!', '#ff9ec4');
   } else {
     rival.score = Math.min(100, rival.score + 3);
-    addFloat(it.x, it.y, '시현 +3', '#ff9ec4');
+    addFloat(it.x, it.y, '예지 +3', '#ff9ec4');
   }
 }
 
@@ -408,7 +408,7 @@ const STYLE_SEUNGHYUN = {
   pants: '#232a45', book: '#2e8b57', skirt: false,
 };
 const STYLE_SIHYUN = {
-  name: '김시현', tag: '#ff9ec4',
+  name: '최예지', tag: '#ff9ec4',
   hair: '#3a262c', hairStyle: 'long',
   jacket: '#c2497a', lapel: '#973560',
   neck: 'ribbon', neckColor: '#ffd369',
@@ -660,7 +660,7 @@ function drawTitle() {
 
   drawCharacter(W / 2 - 80, 372, 84, 1, 'idle');
   drawRival(W / 2 + 80, 372, 80, -1, 'idle');
-  centerText('임승현 vs 김시현 — 글로벌 비즈니스학과 성적 라이벌!', 462, '14px sans-serif', '#8fa');
+  centerText('임승현 vs 최예지 — 글로벌 비즈니스학과 성적 라이벌!', 462, '14px sans-serif', '#8fa');
 
   const y = 520;
   centerText('📖📚🌏 지식을 받아 A+ (80점)를 노려라!', y, '15px sans-serif', '#cde');
@@ -715,7 +715,7 @@ function drawPlay() {
     ctx.shadowBlur = 0;
   }
 
-  // 라이벌 김시현 (플레이어보다 뒤에 그린다)
+  // 라이벌 최예지 (플레이어보다 뒤에 그린다)
   const rState = rival.stun > 0 ? 'stun' : (rival.moving ? 'run' : 'idle');
   drawRival(rival.x, rival.y, 58, rival.face, rState);
 
@@ -767,7 +767,7 @@ function drawPlay() {
   ctx.fillText(`🧠 지식 ${knowledge}`, bx, by + bh + 16);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ff9ec4';
-  ctx.fillText(`💗 시현 ${rival.score}`, W / 2, by + bh + 16);
+  ctx.fillText(`💗 예지 ${rival.score}`, W / 2, by + bh + 16);
   ctx.textAlign = 'right';
   ctx.fillStyle = knowledge >= APLUS ? '#ffd369' : '#789';
   ctx.fillText(knowledge >= APLUS ? '✨ A+ 확보! 유지하라!' : `A+ 커트라인 ${APLUS}`, bx + bw, by + bh + 16);
@@ -821,8 +821,8 @@ function drawResult() {
   centerText(`최종 지식 ${lastGradeScore}점 · 최대 콤보 ${maxCombo}`, 435, '15px sans-serif', '#8fa');
   const beat = lastGradeScore >= lastRivalScore;
   centerText(
-    beat ? `시현 ${lastRivalScore}점 — "어떻게 매번 나를 이겨...?"`
-         : `시현 ${lastRivalScore}점 — "후후, 이번 학기는 내가 위네?"`,
+    beat ? `예지 ${lastRivalScore}점 — "어떻게 매번 나를 이겨...?"`
+         : `예지 ${lastRivalScore}점 — "후후, 이번 학기는 내가 위네?"`,
     463, '14px sans-serif', '#ff9ec4');
 
   // 성적표 진행
@@ -864,7 +864,7 @@ function drawGameover() {
 
   centerText('💡 팁: 유혹은 피하고, 기말고사 주간의', 500, '13px sans-serif', '#9ab');
   centerText('황금 아이템(2배)을 노려보세요!', 522, '13px sans-serif', '#9ab');
-  centerText('시현: "...같이 졸업하기로 했잖아. 다시 일어나."', 556, '14px sans-serif', '#ff9ec4');
+  centerText('예지: "...같이 졸업하기로 했잖아. 다시 일어나."', 556, '14px sans-serif', '#ff9ec4');
 
   if (sceneTimer > 1.0 && Math.sin(performance.now() / 300) > -0.3)
     centerText('▶ 탭 또는 스페이스로 재도전', 630, 'bold 18px sans-serif', '#fff');
@@ -887,10 +887,10 @@ function drawClear() {
   drawCharacter(W / 2 - 70, 372, 78, 1, 'happy');
   drawRival(W / 2 + 74, 372, 74, -1, 'happy');
   centerText('글로벌 비즈니스학과 수석 졸업생', 458, 'bold 15px sans-serif', '#8fa');
-  centerText(`시현과의 성적 대결 전적: ${playerWins}승 ${rivalWins}패`, 482, '13px sans-serif', '#ff9ec4');
+  centerText(`예지과의 성적 대결 전적: ${playerWins}승 ${rivalWins}패`, 482, '13px sans-serif', '#ff9ec4');
 
   centerText('졸업식 날, 글로벌 기업 10곳의 스카우트 제안!', 512, '14px sans-serif', '#cde');
-  centerText('시현: "인정할게. 너 진짜 대단했어."', 536, '14px sans-serif', '#ff9ec4');
+  centerText('예지: "인정할게. 너 진짜 대단했어."', 536, '14px sans-serif', '#ff9ec4');
   centerText('"임승현 씨, 우리 회사로 오시죠!"', 560, 'bold 15px sans-serif', '#ffd369');
 
   drawTranscript(583);
