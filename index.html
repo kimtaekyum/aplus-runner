@@ -71,6 +71,17 @@ const INTRO_LINES = [
   '"마지막 학기. 전설이 되느냐, 재수강이냐!"',
 ];
 
+const RIVAL_LINES = [
+  '시현: "네가 임승현? 올 A+가 목표라며. 나도야."',
+  '시현: "영어 발표 수업? 여기선 내가 홈그라운드지."',
+  '시현: "지난 학기는 운이 좋았을 뿐이야."',
+  '시현: "무역용어 정리본? 너한텐 안 보여줄 건데~"',
+  '시현: "환율 계산 속도는 내가 한 수 위야."',
+  '시현: "협상은 심리전. 네 표정, 다 읽혀."',
+  '시현: "벌써 4학년이네. 끝까지 가보자."',
+  '시현: "마지막 학기... 나도 전력으로 간다!"',
+];
+
 // 아이템 정의
 const GOOD_ITEMS = [
   { emoji: '📖', score: 8,  label: '+8' },
@@ -98,6 +109,8 @@ let retries = 2;       // 재수강 기회
 let grades = [];
 
 const player = { x: W / 2, y: H - 90, w: 74, h: 74, vx: 0, face: 1, stun: 0, boost: 0 };
+const rival = { x: W / 4, y: H - 90, face: 1, stun: 0, score: 0, moving: false };
+let playerWins = 0, rivalWins = 0, lastRivalScore = 0;
 let items = [];        // 떨어지는 것들
 let floats = [];       // 떠오르는 텍스트
 let particles = [];
@@ -125,7 +138,7 @@ canvas.addEventListener('pointermove', e => { if (e.buttons || e.pointerType ===
 canvas.addEventListener('pointerup', () => pointerX = null);
 
 function advance() {
-  if (scene === 'title') { semIdx = 0; retries = 2; grades = []; startIntro(); }
+  if (scene === 'title') { semIdx = 0; retries = 2; grades = []; playerWins = 0; rivalWins = 0; startIntro(); }
   else if (scene === 'intro' && sceneTimer > 0.6) startPlay();
   else if (scene === 'result' && sceneTimer > 1.2) {
     semIdx++;
@@ -145,6 +158,7 @@ function startPlay() {
   timeLeft = s.time; spawnTimer = 0; finalsWeek = false;
   items = []; floats = []; particles = [];
   player.x = W / 2; player.stun = 0; player.boost = 0;
+  rival.x = W / 4; rival.stun = 0; rival.score = 0; rival.face = 1;
 }
 
 // ===== 스폰 =====
@@ -219,6 +233,21 @@ function updatePlay(dt) {
   player.x += dir * speed * dt;
   player.x = Math.max(40, Math.min(W - 40, player.x));
 
+  // 라이벌 김시현 AI: 가장 가까운 좋은 아이템을 쫓는다
+  if (rival.stun > 0) rival.stun -= dt;
+  let target = null, bestD = Infinity;
+  for (const it of items) {
+    if (it.kind === 'bad') continue;
+    const d = Math.abs(it.x - rival.x) + (H - it.y) * 0.8;
+    if (d < bestD) { bestD = d; target = it; }
+  }
+  let rdir = 0;
+  if (target && Math.abs(target.x - rival.x) > 6) rdir = Math.sign(target.x - rival.x);
+  rival.moving = rdir !== 0;
+  if (rdir !== 0) rival.face = rdir;
+  rival.x += rdir * (rival.stun > 0 ? 90 : 255) * dt;
+  rival.x = Math.max(40, Math.min(W - 40, rival.x));
+
   // 타이머
   timeLeft -= dt;
   if (!finalsWeek && timeLeft <= 10) {
@@ -232,7 +261,7 @@ function updatePlay(dt) {
   if (spawnTimer <= 0) {
     spawnItem();
     if (finalsWeek && Math.random() < 0.5) spawnItem();
-    spawnTimer = s.spawn * (finalsWeek ? 0.6 : 1);
+    spawnTimer = s.spawn * 0.85 * (finalsWeek ? 0.6 : 1); // 시현과 경쟁하는 만큼 아이템 보충
   }
 
   // 아이템 이동/충돌
@@ -244,6 +273,10 @@ function updatePlay(dt) {
     if (dx < 44 && dy < 46 && !it.hit) {
       it.hit = true;
       handleCatch(it);
+    }
+    if (!it.hit) {
+      const rdx = Math.abs(it.x - rival.x), rdy = Math.abs(it.y - (rival.y - 10));
+      if (rdx < 38 && rdy < 42) { it.hit = true; rivalCatch(it); }
     }
   }
   items = items.filter(it => !it.hit && it.y < H + 40);
@@ -281,10 +314,28 @@ function handleCatch(it) {
   }
 }
 
+function rivalCatch(it) {
+  if (it.kind === 'good') {
+    const sc = it.def.score * (it.golden ? 2 : 1);
+    rival.score = Math.min(100, rival.score + sc);
+    addFloat(it.x, it.y, '시현 +' + sc, '#ff9ec4');
+    burst(it.x, it.y, '#ff9ec4', 6);
+  } else if (it.kind === 'bad') {
+    rival.score = Math.max(0, rival.score + it.def.score);
+    rival.stun = 1.2;
+    addFloat(it.x, it.y, '시현 멘붕!', '#ff9ec4');
+  } else {
+    rival.score = Math.min(100, rival.score + 3);
+    addFloat(it.x, it.y, '시현 +3', '#ff9ec4');
+  }
+}
+
 function endSemester() {
   lastGradeScore = knowledge;
+  lastRivalScore = rival.score;
   if (knowledge >= APLUS) {
     grades.push('A+');
+    if (knowledge >= rival.score) playerWins++; else rivalWins++;
     scene = 'result'; sceneTimer = 0;
   } else {
     failSemester(`지식 ${knowledge}점... A+ 커트라인(${APLUS})에 못 미쳤다.`);
@@ -348,9 +399,27 @@ function draw() {
   ctx.restore();
 }
 
-// 임승현 캐릭터 (직접 그린 벡터 캐릭터)
+// 캐릭터 스타일 정의
+const STYLE_SEUNGHYUN = {
+  name: '임승현', tag: '#ffd369',
+  hair: '#26262e', hairStyle: 'short',
+  jacket: st.jacket, lapel: '#24397a',
+  neck: 'tie', neckColor: '#e94560',
+  pants: '#232a45', book: '#2e8b57', skirt: false,
+};
+const STYLE_SIHYUN = {
+  name: '김시현', tag: '#ff9ec4',
+  hair: '#3a262c', hairStyle: 'long',
+  jacket: '#c2497a', lapel: '#973560',
+  neck: 'ribbon', neckColor: '#ffd369',
+  pants: '#973560', book: '#e8608a', skirt: true,
+};
+function drawCharacter(x, y, size, face, state) { drawPerson(x, y, size, face, state, STYLE_SEUNGHYUN); }
+function drawRival(x, y, size, face, state) { drawPerson(x, y, size, face, state, STYLE_SIHYUN); }
+
+// 공용 캐릭터 렌더러 (직접 그린 벡터 캐릭터)
 // state: 'idle' | 'run' | 'stun' | 'happy'
-function drawCharacter(x, y, size, face, state) {
+function drawPerson(x, y, size, face, state, st) {
   const t = performance.now() / 1000;
   const s = size / 96;
   const moving = state === 'run';
@@ -376,49 +445,68 @@ function drawCharacter(x, y, size, face, state) {
 
   // 다리 (달릴 때 스윙)
   const swing = moving ? Math.sin(t * 13) * 9 * s : 0;
-  ctx.strokeStyle = '#232a45';
-  ctx.lineWidth = 9 * s;
+  ctx.strokeStyle = st.skirt ? '#ffdcb8' : st.pants;
+  ctx.lineWidth = st.skirt ? 6.5 * s : 9 * s;
   ctx.beginPath(); ctx.moveTo(-8 * s, -28 * s); ctx.lineTo(-8 * s + swing, -5 * s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(8 * s, -28 * s); ctx.lineTo(8 * s - swing, -5 * s); ctx.stroke();
   // 구두
-  ctx.fillStyle = '#3d2f23';
+  ctx.fillStyle = st.skirt ? '#5a3040' : '#3d2f23';
   ctx.beginPath(); ctx.ellipse(-8 * s + swing + 3 * s, -4 * s, 7 * s, 4 * s, 0, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(8 * s - swing + 3 * s, -4 * s, 7 * s, 4 * s, 0, 0, Math.PI * 2); ctx.fill();
 
+  // 치마
+  if (st.skirt) {
+    ctx.fillStyle = st.lapel;
+    ctx.beginPath();
+    ctx.moveTo(-14 * s, -32 * s); ctx.lineTo(14 * s, -32 * s);
+    ctx.lineTo(19 * s, -14 * s); ctx.lineTo(-19 * s, -14 * s);
+    ctx.closePath(); ctx.fill();
+  }
+
   // 뒤쪽 팔
   const armSwing = moving ? Math.sin(t * 13) * 9 * s : Math.sin(t * 2.4) * 2 * s;
-  ctx.strokeStyle = '#2e4a8f';
+  ctx.strokeStyle = st.jacket;
   ctx.lineWidth = 8 * s;
   ctx.beginPath(); ctx.moveTo(-15 * s, -52 * s); ctx.lineTo(-22 * s - armSwing * 0.4, -36 * s + armSwing); ctx.stroke();
   ctx.fillStyle = '#ffdcb8';
   ctx.beginPath(); ctx.arc(-22 * s - armSwing * 0.4, -36 * s + armSwing, 4.5 * s, 0, Math.PI * 2); ctx.fill();
 
   // 몸통: 네이비 블레이저
-  ctx.fillStyle = '#2e4a8f';
+  ctx.fillStyle = st.jacket;
   roundRect(-19 * s, -60 * s, 38 * s, 36 * s, 10 * s); ctx.fill();
   // 셔츠 + 넥타이
   ctx.fillStyle = '#f5f5f5';
   ctx.beginPath(); ctx.moveTo(-8 * s, -60 * s); ctx.lineTo(8 * s, -60 * s); ctx.lineTo(0, -43 * s); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#e94560';
-  ctx.beginPath();
-  ctx.moveTo(-3 * s, -58 * s); ctx.lineTo(3 * s, -58 * s); ctx.lineTo(4 * s, -48 * s);
-  ctx.lineTo(0, -43 * s); ctx.lineTo(-4 * s, -48 * s);
-  ctx.closePath(); ctx.fill();
+  if (st.neck === 'tie') {
+    ctx.fillStyle = st.neckColor;
+    ctx.beginPath();
+    ctx.moveTo(-3 * s, -58 * s); ctx.lineTo(3 * s, -58 * s); ctx.lineTo(4 * s, -48 * s);
+    ctx.lineTo(0, -43 * s); ctx.lineTo(-4 * s, -48 * s);
+    ctx.closePath(); ctx.fill();
+  } else {
+    // 리본
+    ctx.fillStyle = st.neckColor;
+    ctx.beginPath();
+    ctx.moveTo(0, -56 * s); ctx.lineTo(-8 * s, -60 * s); ctx.lineTo(-8 * s, -52 * s); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -56 * s); ctx.lineTo(8 * s, -60 * s); ctx.lineTo(8 * s, -52 * s); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -56 * s, 2.2 * s, 0, Math.PI * 2); ctx.fill();
+  }
   // 라펠 라인
-  ctx.strokeStyle = '#24397a';
+  ctx.strokeStyle = st.lapel;
   ctx.lineWidth = 2 * s;
   ctx.beginPath(); ctx.moveTo(-8 * s, -60 * s); ctx.lineTo(-6 * s, -48 * s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(8 * s, -60 * s); ctx.lineTo(6 * s, -48 * s); ctx.stroke();
 
   // 앞쪽 팔: 전공책을 들고 있다
-  ctx.strokeStyle = '#2e4a8f';
+  ctx.strokeStyle = st.jacket;
   ctx.lineWidth = 8 * s;
   ctx.beginPath(); ctx.moveTo(15 * s, -52 * s); ctx.lineTo(24 * s, -62 * s - armSwing * 0.5); ctx.stroke();
   // 전공책
   ctx.save();
   ctx.translate(26 * s, -68 * s - armSwing * 0.5);
   ctx.rotate(-0.25);
-  ctx.fillStyle = '#2e8b57';
+  ctx.fillStyle = st.book;
   roundRect(-9 * s, -12 * s, 18 * s, 24 * s, 2 * s); ctx.fill();
   ctx.fillStyle = '#ffd369';
   ctx.fillRect(-9 * s, -4 * s, 18 * s, 3 * s);
@@ -429,14 +517,22 @@ function drawCharacter(x, y, size, face, state) {
 
   // ===== 머리 =====
   const hy = -80 * s;
-  // 귀
+  // 뒷머리 (긴 머리 스타일)
+  if (st.hairStyle === 'long') {
+    ctx.fillStyle = st.hair;
+    roundRect(-24 * s, hy - 22 * s, 48 * s, 52 * s, 16 * s);
+    ctx.fill();
+  }
   ctx.fillStyle = '#ffdcb8';
-  ctx.beginPath(); ctx.arc(-20 * s, hy + 2 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(20 * s, hy + 2 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+  if (st.hairStyle === 'short') {
+    // 귀
+    ctx.beginPath(); ctx.arc(-20 * s, hy + 2 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(20 * s, hy + 2 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+  }
   // 얼굴
   ctx.beginPath(); ctx.arc(0, hy, 21 * s, 0, Math.PI * 2); ctx.fill();
   // 머리카락 (앞머리 뱅 스타일)
-  ctx.fillStyle = '#26262e';
+  ctx.fillStyle = st.hair;
   ctx.beginPath();
   ctx.arc(0, hy, 21.5 * s, Math.PI * 0.98, Math.PI * 2.02);
   ctx.lineTo(21.5 * s, hy - 4 * s);
@@ -445,13 +541,22 @@ function drawCharacter(x, y, size, face, state) {
   ctx.quadraticCurveTo(-13 * s, hy - 13 * s, -21.5 * s, hy - 4 * s);
   ctx.closePath();
   ctx.fill();
-  // 옆머리
-  ctx.fillRect(-22 * s, hy - 6 * s, 5 * s, 12 * s);
-  ctx.fillRect(17 * s, hy - 6 * s, 5 * s, 12 * s);
-  // 삐친 머리 한 가닥
-  ctx.strokeStyle = '#26262e';
-  ctx.lineWidth = 3 * s;
-  ctx.beginPath(); ctx.moveTo(4 * s, hy - 21 * s); ctx.quadraticCurveTo(9 * s, hy - 30 * s, 14 * s, hy - 25 * s); ctx.stroke();
+  if (st.hairStyle === 'short') {
+    // 옆머리
+    ctx.fillRect(-22 * s, hy - 6 * s, 5 * s, 12 * s);
+    ctx.fillRect(17 * s, hy - 6 * s, 5 * s, 12 * s);
+    // 삐친 머리 한 가닥
+    ctx.strokeStyle = st.hair;
+    ctx.lineWidth = 3 * s;
+    ctx.beginPath(); ctx.moveTo(4 * s, hy - 21 * s); ctx.quadraticCurveTo(9 * s, hy - 30 * s, 14 * s, hy - 25 * s); ctx.stroke();
+  } else {
+    // 긴 옆머리 + 머리핀
+    ctx.fillRect(-24 * s, hy - 6 * s, 6 * s, 26 * s);
+    ctx.fillRect(18 * s, hy - 6 * s, 6 * s, 26 * s);
+    ctx.strokeStyle = '#ffd369';
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.moveTo(11 * s, hy - 13 * s); ctx.lineTo(17 * s, hy - 9 * s); ctx.stroke();
+  }
 
   const ey = hy + 3 * s;
 
@@ -519,11 +624,11 @@ function drawCharacter(x, y, size, face, state) {
   const nw = 74;
   roundRect(x - nw / 2, y + size * 0.55, nw, 22, 11);
   ctx.fill();
-  ctx.fillStyle = '#ffd369';
+  ctx.fillStyle = st.tag;
   ctx.font = 'bold 13px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('임승현', x, y + size * 0.55 + 11);
+  ctx.fillText(st.name, x, y + size * 0.55 + 11);
   if (stunned) {
     ctx.font = '20px sans-serif';
     ctx.fillText('💫', x, y - size * 0.7);
@@ -553,8 +658,9 @@ function drawTitle() {
   centerText('올 A+ 러너', 220, 'bold 44px sans-serif', '#ffd369');
   centerText('임승현의 글로벌 비즈니스 챌린지', 262, '17px sans-serif', '#9ab');
 
-  drawCharacter(W / 2, 370, 90, 1, 'idle');
-  centerText('글로벌 비즈니스학과 새내기', 460, '14px sans-serif', '#8fa');
+  drawCharacter(W / 2 - 80, 372, 84, 1, 'idle');
+  drawRival(W / 2 + 80, 372, 80, -1, 'idle');
+  centerText('임승현 vs 김시현 — 글로벌 비즈니스학과 성적 라이벌!', 462, '14px sans-serif', '#8fa');
 
   const y = 520;
   centerText('📖📚🌏 지식을 받아 A+ (80점)를 노려라!', y, '15px sans-serif', '#cde');
@@ -581,8 +687,10 @@ function drawIntro() {
   centerText('수강 과목', 240, '14px sans-serif', '#789');
   centerText('『 ' + s.course + ' 』', 275, 'bold 26px sans-serif', '#4facfe');
 
-  drawCharacter(W / 2, 380, 80, 1, 'idle');
-  centerText(INTRO_LINES[semIdx], 470, '15px sans-serif', '#cde');
+  drawCharacter(W / 2 - 78, 385, 74, 1, 'idle');
+  drawRival(W / 2 + 78, 385, 74, -1, 'idle');
+  centerText(INTRO_LINES[semIdx], 478, '14px sans-serif', '#cde');
+  centerText(RIVAL_LINES[semIdx], 502, '14px sans-serif', '#ff9ec4');
 
   centerText(`⏱ ${s.time}초 안에 지식 ${APLUS}점 이상 = A+`, 540, '15px sans-serif', '#8fa');
   if (failFlash) centerText(`(재수강 중... 남은 기회 ${retries}번)`, 570, '13px sans-serif', '#f99');
@@ -607,7 +715,11 @@ function drawPlay() {
     ctx.shadowBlur = 0;
   }
 
-  // 캐릭터
+  // 라이벌 김시현 (플레이어보다 뒤에 그린다)
+  const rState = rival.stun > 0 ? 'stun' : (rival.moving ? 'run' : 'idle');
+  drawRival(rival.x, rival.y, 58, rival.face, rState);
+
+  // 임승현
   const pState = player.stun > 0 ? 'stun' : (player.moving ? 'run' : 'idle');
   drawCharacter(player.x, player.y, 64, player.face, pState);
   if (player.boost > 0) {
@@ -653,6 +765,9 @@ function drawPlay() {
   ctx.fillStyle = '#cde';
   ctx.font = 'bold 13px sans-serif';
   ctx.fillText(`🧠 지식 ${knowledge}`, bx, by + bh + 16);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff9ec4';
+  ctx.fillText(`💗 시현 ${rival.score}`, W / 2, by + bh + 16);
   ctx.textAlign = 'right';
   ctx.fillStyle = knowledge >= APLUS ? '#ffd369' : '#789';
   ctx.fillText(knowledge >= APLUS ? '✨ A+ 확보! 유지하라!' : `A+ 커트라인 ${APLUS}`, bx + bw, by + bh + 16);
@@ -703,7 +818,12 @@ function drawResult() {
   ctx.restore();
   if (t >= 1 && sceneTimer < 0.55) { shake = 12; burst(W / 2, 330, '#ffd369', 24); }
 
-  centerText(`최종 지식 ${lastGradeScore}점 · 최대 콤보 ${maxCombo}`, 440, '15px sans-serif', '#8fa');
+  centerText(`최종 지식 ${lastGradeScore}점 · 최대 콤보 ${maxCombo}`, 435, '15px sans-serif', '#8fa');
+  const beat = lastGradeScore >= lastRivalScore;
+  centerText(
+    beat ? `시현 ${lastRivalScore}점 — "어떻게 매번 나를 이겨...?"`
+         : `시현 ${lastRivalScore}점 — "후후, 이번 학기는 내가 위네?"`,
+    463, '14px sans-serif', '#ff9ec4');
 
   // 성적표 진행
   drawTranscript(500);
@@ -744,6 +864,7 @@ function drawGameover() {
 
   centerText('💡 팁: 유혹은 피하고, 기말고사 주간의', 500, '13px sans-serif', '#9ab');
   centerText('황금 아이템(2배)을 노려보세요!', 522, '13px sans-serif', '#9ab');
+  centerText('시현: "...같이 졸업하기로 했잖아. 다시 일어나."', 556, '14px sans-serif', '#ff9ec4');
 
   if (sceneTimer > 1.0 && Math.sin(performance.now() / 300) > -0.3)
     centerText('▶ 탭 또는 스페이스로 재도전', 630, 'bold 18px sans-serif', '#fff');
@@ -763,11 +884,13 @@ function drawClear() {
   centerText('전설의 수석 졸업!', 225, 'bold 38px sans-serif', '#ffd369');
   centerText('8학기 전 과목 올 A+ 달성', 270, '17px sans-serif', '#cde');
 
-  drawCharacter(W / 2, 370, 84, 1, 'happy');
-  centerText('글로벌 비즈니스학과 수석 졸업생', 460, 'bold 15px sans-serif', '#8fa');
+  drawCharacter(W / 2 - 70, 372, 78, 1, 'happy');
+  drawRival(W / 2 + 74, 372, 74, -1, 'happy');
+  centerText('글로벌 비즈니스학과 수석 졸업생', 458, 'bold 15px sans-serif', '#8fa');
+  centerText(`시현과의 성적 대결 전적: ${playerWins}승 ${rivalWins}패`, 482, '13px sans-serif', '#ff9ec4');
 
-  centerText('졸업식 날, 글로벌 기업 10곳에서', 510, '14px sans-serif', '#cde');
-  centerText('스카우트 제안이 쏟아졌다.', 532, '14px sans-serif', '#cde');
+  centerText('졸업식 날, 글로벌 기업 10곳의 스카우트 제안!', 512, '14px sans-serif', '#cde');
+  centerText('시현: "인정할게. 너 진짜 대단했어."', 536, '14px sans-serif', '#ff9ec4');
   centerText('"임승현 씨, 우리 회사로 오시죠!"', 560, 'bold 15px sans-serif', '#ffd369');
 
   drawTranscript(583);
